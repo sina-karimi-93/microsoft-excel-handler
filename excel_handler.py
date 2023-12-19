@@ -1,15 +1,12 @@
 """
 This module is about working with an excel file.
 """
-from os import getcwd
 from os.path import exists
 from win32com.client import Dispatch
 from typing import Generator
 from typing import Any
 from errors import NotFoundExcelFileError
 from errors import NotFoundSheetError
-from pprint import pprint
-
 
 
 class ExcelHandler:
@@ -18,6 +15,22 @@ class ExcelHandler:
     an excel file, fetch its data and update
     them.
 
+    @methods
+        open_excel
+        create_new
+        set_sheet
+        get_columns_count
+        get_rows_count
+        fetch_all
+        fetch_range
+        get_as_dict
+        update_cell
+        save
+        save_as
+        close
+    
+    @note
+        better to use this class as context manager.
     """
     def __init__(self,
                  dev: bool = False) -> None:
@@ -112,7 +125,7 @@ class ExcelHandler:
             to ignore the steps finding the last row
             and column.
         """
-        if not all(rows_count, columns_count):
+        if not all((rows_count, columns_count)):
             columns_count = self.get_columns_count()
             rows_count = self.get_rows_count()
         for row_number in range(1, rows_count + 1):
@@ -174,11 +187,13 @@ class ExcelHandler:
         """
         if self.excel_app.ActiveWorkbook:
             self.excel_app.ActiveWorkbook.Close()
+        del self.excel_app
 
 if __name__ == "__main__":
+    from os import getcwd
     with ExcelHandler(dev=True) as handler:
-        handler.open_excel(f"{getcwd()}/data/sample-11.xls")
-        data = handler.fetch_all()
+        handler.open_excel(f"{getcwd()}/data/sample-1.xls")
+        data = handler.fetch_all(1001, 7)
         data_as_dict = tuple(handler.get_as_dict(next(data), data))
         # range_data = tuple(handler.fetch_range((1,1), (5,7)))
         # handler.close()

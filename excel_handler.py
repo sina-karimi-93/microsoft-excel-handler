@@ -2,13 +2,23 @@
 This module is about working with an excel file.
 """
 from os import getcwd
+from os.path import exists
 from win32com.client import Dispatch
-from pprint import pprint
 from typing import Generator
 from typing import Any
+from errors import NotFoundExcelFileError
+from errors import NotFoundSheetError
+from pprint import pprint
+
+
 
 class ExcelHandler:
+    """
+    This class contains all the tools to open
+    an excel file, fetch its data and update
+    them.
 
+    """
     def __init__(self,
                  dev: bool = False) -> None:
         self.excel_app = Dispatch("Excel.Application")
@@ -20,7 +30,6 @@ class ExcelHandler:
     
     def __exit__(self, *args) -> object:
         self.close()
-        return self
     
     def open_excel(self, 
                    file_path: str,
@@ -29,6 +38,8 @@ class ExcelHandler:
         Open an excel file if the path provided
         or create new one of file path is empty.
         """
+        if not exists(file_path):
+            raise NotFoundExcelFileError("Couldn't find the desired excel file.")
         self.excel_app.Workbooks.open(file_path)
         self.work_book = self.excel_app.WorkBooks(1)
         self.set_sheet(sheet_name)
@@ -51,12 +62,13 @@ class ExcelHandler:
         if not sheet_name:
             self.sheet = self.work_book.Sheets(1)
             return
-        for sheet_number in range(1,self.work_book.Sheets.Count+1):
+        total_sheets_count = self.work_book.Sheets.Count
+        for sheet_number in range(1, total_sheets_count + 1):
             self.sheet = self.work_book.Sheets(sheet_number)
             if self.sheet.name == sheet_name:
                 break
         else:
-            raise ValueError("Desired sheet is not in the file.")
+            raise NotFoundSheetError("Desired sheet is not in the file.")
 
     def get_columns_count(self) -> int:
         """
@@ -82,12 +94,27 @@ class ExcelHandler:
             row_count += 1
         return row_count - 1
 
-    def fetch_all(self) -> Generator:
+    def fetch_all(self, 
+                  rows_count: int = None,
+                  columns_count: int = None) -> Generator:
         """
-        Fetch all data in the data
+        Fetch all data in the data.
+        ------------------------------------
+        -> Params
+            rows_count : int
+            columns_count: int
+        <- Return
+            Generator
+        @note
+            As the end of the sheet is not specified
+            and we have to find it by ourselve, user
+            can specify the end last row and column
+            to ignore the steps finding the last row
+            and column.
         """
-        columns_count = self.get_columns_count()
-        rows_count = self.get_rows_count()
+        if not all(rows_count, columns_count):
+            columns_count = self.get_columns_count()
+            rows_count = self.get_rows_count()
         for row_number in range(1, rows_count + 1):
             row_object = self.sheet.Range(self.sheet.Cells(row_number, 1),
                                           self.sheet.Cells(row_number, columns_count))
@@ -145,11 +172,12 @@ class ExcelHandler:
         """
         Close the app
         """
-        # self.excel_app.ActiveWorkbook.Close()
+        if self.excel_app.ActiveWorkbook:
+            self.excel_app.ActiveWorkbook.Close()
 
 if __name__ == "__main__":
     with ExcelHandler(dev=True) as handler:
-        handler.open_excel(f"{getcwd()}/data/sample-1.xls")
+        handler.open_excel(f"{getcwd()}/data/sample-11.xls")
         data = handler.fetch_all()
         data_as_dict = tuple(handler.get_as_dict(next(data), data))
         # range_data = tuple(handler.fetch_range((1,1), (5,7)))

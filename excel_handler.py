@@ -1,5 +1,8 @@
 """
 This module is about working with an excel file.
+
+Author: Sina Karimi Aliabad
+year:   2023
 """
 from os.path import exists
 from win32com.client import Dispatch
@@ -8,6 +11,8 @@ from typing import Any
 from errors import NotFoundExcelFileError
 from errors import NotFoundSheetError
 
+__version__ = "1.0"
+__all__ = ["ExcelHandler"]
 
 class ExcelHandler:
     """

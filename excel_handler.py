@@ -1,9 +1,10 @@
 """
 This module is about working with an excel file.
-
 Author: Sina Karimi Aliabad
 year:   2023
 """
+
+
 from os.path import exists
 from win32com.client import Dispatch
 from typing import Generator
@@ -133,11 +134,8 @@ class ExcelHandler:
         if not all((rows_count, columns_count)):
             columns_count = self.get_columns_count()
             rows_count = self.get_rows_count()
-        for row_number in range(1, rows_count + 1):
-            row_object = self.sheet.Range(self.sheet.Cells(row_number, 1),
-                                          self.sheet.Cells(row_number, columns_count))
-            row = row_object.value[0]
-            yield row
+        yield from self.fetch_range((1, 1), 
+                                    (rows_count, columns_count))
 
     def fetch_range(self, start: tuple, end: tuple) -> Generator:
         """
@@ -194,11 +192,17 @@ class ExcelHandler:
             self.excel_app.ActiveWorkbook.Close()
         del self.excel_app
 
+
+
+
 if __name__ == "__main__":
     from os import getcwd
-    with ExcelHandler(dev=True) as handler:
+    from pprint import pprint
+    with ExcelHandler() as handler:
+        handler: ExcelHandler
         handler.open_excel(f"{getcwd()}/data/sample-1.xls")
-        data = handler.fetch_all(1001, 7)
+        data = handler.fetch_all()
         data_as_dict = tuple(handler.get_as_dict(next(data), data))
+        pprint(data_as_dict)
         # range_data = tuple(handler.fetch_range((1,1), (5,7)))
         # handler.close()

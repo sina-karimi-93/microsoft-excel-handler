@@ -38,9 +38,11 @@ class ExcelHandler:
     @note
         better to use this class as context manager.
     """
+    EMPTY_ROWS_TOLERANCE = 5
     def __init__(self,
                  dev: bool = False) -> None:
         self.excel_app = Dispatch("Excel.Application")
+        self.rows_count = 0
         if dev:
             self.excel_app.Visible = 1
 
@@ -86,8 +88,7 @@ class ExcelHandler:
             self.sheet = self.work_book.Sheets(sheet_number)
             if self.sheet.name == sheet_name:
                 break
-        else:
-            raise NotFoundSheetError("Desired sheet is not in the file.")
+        raise NotFoundSheetError("Desired sheet is not in the file.")
 
     def get_columns_count(self) -> int:
         """
@@ -95,23 +96,83 @@ class ExcelHandler:
         the number of columns until it faces
         empty column and stops. Then return
         the counter as number of columns.
+        so line order null
         """
-        column_count = 1
-        while self.sheet.Cells(1, column_count).value:
-            column_count += 1
-        return column_count - 1
+        column_count = 0
+        while True:
+            if self.sheet.Cells(1, column_count + 1).value:
+                column_count += 1
+                continue
+            break
+        return column_count
     
-    def get_rows_count(self) -> int:
+    def _calculate_rows_count(self,
+                             columns_count: int,
+                             rows_count: int = 1,
+                             stride: int = 1000) -> None:
         """
-        Loop through the first column and
-        count the number of row until it faces
-        empty row and stops. Then return
-        the counter as number of row.
+        Recursive method to find the last row in
+        the file.
+        ----------------------------------------
+        -> Params
+            columns_count: int
+            rows_count: int
+            stride: int
         """
-        row_count = 1
-        while self.sheet.Cells(row_count, 1).value:
-            row_count += 1
-        return row_count - 1
+        if stride == 0:
+            self.rows_count = rows_count - 1
+            return
+        row_data = self.sheet.Range(
+                            self.sheet.Cells(rows_count, 1),
+                            self.sheet.Cells(rows_count, columns_count))
+        row_data = row_data.value[0]
+        if any(row_data):
+            rows_count += stride       
+        else:
+            stride //= 2
+            rows_count -= stride
+        self._calculate_rows_count(columns_count, rows_count, stride)
+
+    def check_empty_rows(self, columns_count: int) -> int:
+        """
+        In some of files, there are spaces between
+        rows. This method checks them whether is 
+        there any row after the last calculated
+        row or not. If yes then tries to find the
+        last rows and returns the new number of rows
+        count.
+        --------------------------------------------
+        -> Params
+            columns_count: int
+        """
+        empty_rows_faced_coount = 1
+        rows_count = self.rows_count + 1
+        while empty_rows_faced_coount < self.EMPTY_ROWS_TOLERANCE:
+            rows_count += 1
+            row_data = self.sheet.Range(
+                            self.sheet.Cells(rows_count, 1),
+                            self.sheet.Cells(rows_count, columns_count))
+            row_data = row_data.value[0]
+            if any(row_data):
+                empty_rows_faced_coount = 0
+                continue
+            empty_rows_faced_coount += 1
+        rows_count -= self.EMPTY_ROWS_TOLERANCE
+        return rows_count
+    
+    def calculate_rows_count(self, columns_count: int) -> int:
+        """
+        Returns the number of valid rows(end of the file)
+        count.
+        -------------------------------------------------
+        -> Params
+            columns_count: int
+        <- Return
+            rows_count: int
+        """
+        self._calculate_rows_count(columns_count)
+        rows_count = self.check_empty_rows(columns_count)
+        return rows_count
 
     def fetch_all(self, 
                   rows_count: int = None,
@@ -131,9 +192,10 @@ class ExcelHandler:
             to ignore the steps finding the last row
             and column.
         """
+        self.rows_count = rows_count
         if not all((rows_count, columns_count)):
             columns_count = self.get_columns_count()
-            rows_count = self.get_rows_count()
+            rows_count = self.calculate_rows_count(columns_count)
         yield from self.fetch_range((1, 1), 
                                     (rows_count, columns_count))
 
@@ -144,7 +206,7 @@ class ExcelHandler:
         ----------------------------------------
         -> Params
             start: tuple → (1, 1)
-            end: tuple → (3, 4)
+            end: tuple → (14556, 3)
         """
         range_object = self.sheet.Range(self.sheet.Cells(*start),
                                         self.sheet.Cells(*end))
@@ -201,8 +263,5 @@ if __name__ == "__main__":
     with ExcelHandler() as handler:
         handler: ExcelHandler
         handler.open_excel(f"{getcwd()}/data/sample-1.xls")
-        data = handler.fetch_all()
-        data_as_dict = tuple(handler.get_as_dict(next(data), data))
-        pprint(data_as_dict)
-        # range_data = tuple(handler.fetch_range((1,1), (5,7)))
-        # handler.close()
+        data = list(handler.fetch_all())
+        pprint(data)
